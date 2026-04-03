@@ -1,5 +1,5 @@
-#!/bin/bash
-source .env
+#!/bin/sh
+
 echo "Waiting for MongoDB to be ready..."
 # Wait for MongoDB to be ready using Python
 python3 << END

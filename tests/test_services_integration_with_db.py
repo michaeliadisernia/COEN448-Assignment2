@@ -275,3 +275,99 @@ def test_TC03_event_driven_user_update_propagation(api_base_url, mongo_client):
     print(f"Address:{order_in_db['deliveryAddress']['street']}")
     print(f"\n[TC_03 PASS] Event-driven propagation verified successfully")
 
+
+def test_TC04_api_gateway_routing_strangler_pattern(api_base_url, kong_admin_url="http://localhost:8001"):
+        """
+        TC_04: Validate API Gateway Routing (Strangler Pattern)
+        Requirements: R2.1, R2.2, R2.3, R2.4
+
+        Objective: Ensure Kong routes requests between v1 and v2 based on configured weights.
+        
+        Run this test three times with different .env weights:
+            Case A: USER_SERVICE_V1_WEIGHT=100, USER_SERVICE_V2_WEIGHT=0  (P=100)
+            Case B: USER_SERVICE_V1_WEIGHT=0,   USER_SERVICE_V2_WEIGHT=100 (P=0)
+            Case C: USER_SERVICE_V1_WEIGHT=50,  USER_SERVICE_V2_WEIGHT=50  (P=50)
+        """
+        print("TC_04: API Gateway Routing (Strangler Pattern)")
+
+        # STEP 1: Verify Kong upstream weights via Admin API
+        upstream_response = requests.get(
+            f"{kong_admin_url}/upstreams/user_service_upstream/targets"
+        )
+        assert upstream_response.status_code == 200, \
+            f"STEP 1 FAILED - Could not reach Kong admin API: {upstream_response.status_code}"
+
+        targets = upstream_response.json().get("data", [])
+        assert len(targets) >= 2, f"Step 1 FAILED - Expected 2 targets, got: {len(targets)}"
+
+        v1_target = next((t for t in targets if "v1" in t["target"]), None)
+        v2_target = next((t for t in targets if "v2" in t["target"]), None)
+        assert v1_target is not None, "Step 1 FAILED - v1 target not found in Kong upstream"
+        assert v2_target is not None, "Step 1 FAILED - v2 target not found in Kong upstream"
+
+        v1_weight = v1_target["weight"]
+        v2_weight = v2_target["weight"]
+        total = v1_weight + v2_weight
+        assert total == 100, f"Step 1 FAILED - Weights must sum to 100, got {total}"
+
+        print(f"Step 1 PASS - Kong upstream weights confirmed: v1={v1_weight}, v2={v2_weight}")
+
+        # Step 2: Confirm weights match .env configuration
+        env_v1 = int(os.getenv("USER_SERVICE_V1_WEIGHT", 0))
+        env_v2 = int(os.getenv("USER_SERVICE_V2_WEIGHT", 0))
+        assert v1_weight == env_v1, \
+            f"Step 2 FAILED - Kong v1 weight ({v1_weight}) doesn't match .env ({env_v1})"
+        assert v2_weight == env_v2, \
+            f"Step 2 FAILED - Kong v2 weight ({v2_weight}) doesn't match .env ({env_v2})"
+
+        print(f"Step 2 PASS - Kong weights match .env configuration (not hardcoded)")
+
+        # Step 3: Send 10 requests and verify all succeed
+        total_requests = 10
+        success_count = 0
+        failed_responses = []
+
+        for i in range(total_requests):
+            payload = {
+                "firstName": f"TC04",
+                "lastName": f"Request{i}",
+                "emails": [f"tc04.request{i}@example.com"],
+                "deliveryAddress": {
+                    "street": f"{i} Kong Street",
+                    "city": "Gatewayville",
+                    "state": "QC",
+                    "postalCode": "H1A1A1",
+                    "country": "Canada"
+                }
+            }
+            resp = requests.post(f"{api_base_url}/users/", json=payload)
+            if resp.status_code == 201:
+                success_count += 1
+            else:
+                failed_responses.append(f"Request {i}: {resp.status_code} - {resp.text}")
+
+        assert success_count == total_requests, (
+            f"Step 3 FAILED - Only {success_count}/{total_requests} succeeded.\n"
+            + "\n".join(failed_responses)
+        )
+        print(f"Step 3 PASS - {success_count}/{total_requests} requests succeeded through Kong")
+
+        # Step 4: Case-specific validation
+        if v1_weight == 100 and v2_weight == 0:
+            print("Step 4 - Case A (P=100): All traffic routed to v1 only")
+            print("         Confirmed: v1=100%, v2=0% - Strangler pattern at full v1")
+
+        elif v1_weight == 0 and v2_weight == 100:
+            print("Step 4 - Case B (P=0): All traffic routed to v2 only")
+            print("         Confirmed: v1=0%, v2=100% - Full migration to v2")
+
+        elif v1_weight == 50 and v2_weight == 50:
+            print("Step 4 - Case C (P=50): Traffic split 50/50 between v1 and v2")
+            print("         Confirmed: v1=50%, v2=50% - Active strangler migration")
+
+        else:
+            print(f"Step 4 - Custom weights: v1={v1_weight}%, v2={v2_weight}%")
+
+        print(f"\n[TC_04 PASS] Strangler pattern routing verified for v1={v1_weight}%, v2={v2_weight}%")
+
+

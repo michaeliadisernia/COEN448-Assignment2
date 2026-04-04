@@ -1,4 +1,5 @@
 
+
 services:
   mongodb:
     image: mongo:latest
@@ -10,8 +11,8 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
     ports:
       - "27017:27017"
-    networks:
-      - test_network
+    volumes:
+      - mongodb_data:/data/db
   
   mongodb-setup:
     image: python:3.10-slim
@@ -25,8 +26,6 @@ services:
       - .env
     links:
       - mongodb
-    networks:
-      - test_network
       
   order-service:
     build:
@@ -48,8 +47,6 @@ services:
     depends_on:
       rabbitmq:
           condition: service_healthy
-    networks:
-      - test_network
 
   user-service-v1:
     build:
@@ -71,8 +68,6 @@ services:
     depends_on:
       rabbitmq:
           condition: service_healthy
-    networks:
-      - test_network
   
   user-service-v2:
     build:
@@ -94,8 +89,6 @@ services:
     depends_on:
       rabbitmq:
           condition: service_healthy
-    networks:
-      - test_network
   
   rabbitmq:
     image: rabbitmq:3-management
@@ -116,8 +109,6 @@ services:
       interval: 10s
       timeout: 30s
       retries: 3
-    networks:
-      - test_network
 
   kong:
     image: kong:latest
@@ -126,9 +117,7 @@ services:
       context: ./src/api_gateway
       dockerfile: Dockerfile
       args: 
-        - P_VAL=${P_VALUE}
-    env_file: 
-      - .env
+        - P_VALUE=${P_VALUE}
     environment:
       - KONG_DATABASE=off
       - KONG_DECLARATIVE_CONFIG=/etc/kong/kong.yml
@@ -144,12 +133,9 @@ services:
       - "8443:8443"
       - "8001:8001"
       - "8444:8444"
-    depends_on: 
+    depends_on:
       - order-service
       - user-service-v1
-      - user-service-v2
-    networks:
-      - test_network
 
   konga: 
     container_name: api-gateway-ui
@@ -158,9 +144,6 @@ services:
       - NODE_ENV=production
     ports:
       - "1337:1337"
-    networks:
-      - test_network
 
-networks:
-  test_network:
-    driver: bridge
+volumes:
+  mongodb_data:

@@ -174,6 +174,56 @@ def test_user_update(api_base_url, mongo_client):
     assert updated_user["emails"] == ["updated.email@example.com"]
     assert updated_user["deliveryAddress"]["street"] == "456 Update Street"
 
+def test_TC01_user_creation_and_retrieval(api_base_url, mongo_client):
+
+    """
+    TC01: Validate User Creation and Retrieval
+    Requirements: R1.1, R1.5, R5.1, R5.4
+    """
+
+    print("Starting TC_01: Validate User Creation and Retrieval")
+
+    # Test Step 1: Create initial user to update
+    user_payload = {
+        "firstName": "TC01",
+        "lastName": "User",
+        "emails": ["user_number1@test.com"],
+        "deliveryAddress": {
+            "street": "444 Holiday St",
+            "city": "Testville",
+            "state": "Qc",
+            "postalCode": "H1A1A1",
+            "country": "Canada"
+        }
+    }
+
+    create_response = requests.post(f"{api_base_url}/users/", json=user_payload)
+    assert create_response.status_code == 201, \
+        f"Step 1 FAILED - User creation: {create_response.status_code}: {create_response.text}"
+    
+    created_user = create_response.json()
+    user_id = created_user["userId"]
+
+    # Test Step 2: Retrieve the user
+    get_response = requests.get(f"{api_base_url}/users/{user_id}")
+    assert get_response.status_code == 200, \
+        f"Step 2 FAILED - User retrieval: {get_response.status_code}: {get_response.text}"
+    
+    retrieved_user = get_response.json()
+    assert retrieved_user["emails"] == ["user_number1@test.com"]
+    assert retrieved_user["deliveryAddress"]["street"] == "444 Holiday St"
+
+    # Test Step 3: Verify in MongoDB
+    db = mongo_client[os.getenv("DATABASE_NAME")]
+    user_in_db = db["users"].find_one({"userId": user_id})
+    assert user_in_db is not None
+    assert user_in_db["emails"] == ["user_number1@test.com"]
+    assert user_in_db["deliveryAddress"]["street"] == "444 Holiday St"
+
+    print(f"\n[TC_01 PASS] User creation and retrieval validated successfully")
+
+
+
 def test_TC03_event_driven_user_update_propagation(api_base_url, mongo_client):
     """
     TC_03: Validate Event-Driven User Update Propagation
@@ -184,7 +234,7 @@ def test_TC03_event_driven_user_update_propagation(api_base_url, mongo_client):
 
     print("Starting TC_03: Validate Event-Driven User Update Propagation")
 
-    # Test Step 1: Create initial user to update
+    
     user_payload = {
         "firstName": "TC03",
         "lastName": "Tester",
@@ -196,6 +246,9 @@ def test_TC03_event_driven_user_update_propagation(api_base_url, mongo_client):
             "postalCode": "H8Y1A1",
             "country": "Canada"
         }
+
+    # Test Step 1: Create user
+
     }
     user_response = requests.post(f"{api_base_url}/users/", json=user_payload)
     assert user_response.status_code == 201, \

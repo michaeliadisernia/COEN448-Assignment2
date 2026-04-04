@@ -222,7 +222,71 @@ def test_TC01_user_creation_and_retrieval(api_base_url, mongo_client):
 
     print(f"\n[TC_01 PASS] User creation and retrieval validated successfully")
 
+def test_TC02_order_creation_with_existing_user(api_base_url, mongo_client):
 
+    """
+    TC02: Validate Order Creation with Existing User
+    Requirements: R1.3, R1.6, R4.3, R5.2
+    """
+
+    print("Starting TC_02: Validate Order Creation with Existing User")
+
+    # Test Step 1: Create initial user to update
+    user_payload = {
+        "firstName": "TC02",
+        "lastName": "User",
+        "emails": ["tc2_user@test.com"],
+        "deliveryAddress": {
+            "street": "414 Test Avenue",
+            "city": "Orderville",
+            "state": "QC",
+            "postalCode": "T5T5T5",
+            "country": "Canada"
+        }
+    }
+
+    user_response = requests.post(f"{api_base_url}/users/", json=user_payload)
+    assert user_response.status_code == 201, \
+        f"Step 1 FAILED - User creation: {user_response.status_code}: {user_response.text}"
+    
+    user = user_response.json()
+    user_id = user["userId"]
+
+    # Test Step 2: Create order for the user
+    
+    order_payload = {
+        "userId": user_id,
+        "items" : [{"itemId": "item123", "quantity": 2, "price": 19.99}],
+
+        "userEmails": ["tc2_user@test.com"],
+        "deliveryAddress": {
+            "street": "414 Test Avenue",
+            "city": "Orderville",
+            "state": "QC",
+            "postalCode": "H8Y1A1",
+            "country": "Canada"
+        },
+        "orderStatus": "under process"
+    }
+
+    order_response = requests.post(f"{api_base_url}/orders/", json=order_payload)
+    assert order_response.status_code == 201, \
+        f"Step 2 FAILED - Order creation: {order_response.status_code}: {order_response.text}"
+
+    new_order = order_response.json()
+    order_id = new_order["orderId"]
+
+    # Test Step 3: Verify order in MongoDB
+    db = mongo_client[os.getenv("DATABASE_NAME")]
+    order_in_db = db["orders"].find_one({"orderId": order_id})
+    assert order_in_db is not None
+    assert order_in_db["userId"] == user_id
+    assert order_in_db["userEmails"] == ["tc2_user@test.com"]
+    assert order_in_db["deliveryAddress"]["street"] == "414 Test Avenue"
+    assert order_in_db["items"][0]["itemId"] == "item123"
+    assert order_in_db["orderStatus"] == "under process"
+
+    print(f"\n[TC_02 PASS] Order creation with existing user validated successfully")
 
 def test_TC03_event_driven_user_update_propagation(api_base_url, mongo_client):
     """

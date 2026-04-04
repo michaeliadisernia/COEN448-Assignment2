@@ -39,6 +39,7 @@ services:
           - "/users/(?<user_id>[\\w-]+)"
         strip_path: false
         methods:
+          - GET
           - POST
           - PUT
 

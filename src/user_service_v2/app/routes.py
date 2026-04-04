@@ -168,3 +168,17 @@ class User(Resource):
         # Publish the update event
         publish_user_update_event(id, emails, delivery_address)
         return [old_user, new_user]
+    
+    @api.marshal_with(user_model)
+    def get(self, id: str):
+
+        """"
+        Retrieve user with his ID.
+        """
+
+        users_collection=current_app.users_collection
+        user=users_collection.find_one({'userId':id})
+
+        if not user: api.abort(404, "User not found")
+
+        return user, 200
